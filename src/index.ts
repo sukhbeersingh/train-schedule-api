@@ -52,8 +52,7 @@ app.get('/schedule/:line', (req: Request, res: Response<TimeTableEntry[] | Error
   const lineSchedule = scheduleData.filter(
     (record) => record.line === line
   );
-
-  if (!lineSchedule) {
+  if (lineSchedule.length === 0) {
     return res.status(404).json({ message: 'Line not found' });
   }
   if (!departureParam){
@@ -75,6 +74,10 @@ app.get('/schedule/:line', (req: Request, res: Response<TimeTableEntry[] | Error
   }
 });
 
-app.listen(3000, () => {
-  console.log('App listening on port 3000');
-});
+if (process.env.NODE_ENV !== 'test'){
+  app.listen(3000, () => {
+    console.log('App listening on port 3000');
+  });
+}
+
+export default app;
