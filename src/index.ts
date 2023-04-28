@@ -1,6 +1,21 @@
 import express, { Request, Response } from 'express';
 import fs from 'fs';
+import { createClient } from 'redis';
 import { getDepartureSanitized } from './utils';
+
+let client;
+
+try {
+  client = createClient({
+    socket: {
+      host: process.env.REDIS_HOST,
+      port: 6379
+    }
+  });
+} catch (err) {
+  console.log('error while initializing redis client', err);
+}
+
 
 interface TimeTableEntry {
   id: number;
@@ -22,12 +37,18 @@ const cache = {};
 
 function cacheMiddleware(req: Request, res: Response, next) {
   const key = req.originalUrl;
-  const cachedData = cache[key];
-  if (cachedData) {
-    res.json(cachedData);
-  } else {
-    next();
+
+  try {
+    const cachedData = client.get(key);
+    if (cachedData) {
+      res.json(cachedData);
+    } else {
+      next();
+    }
+  } catch (err) {
+    console.log('there was an error getting key from redis client', err);
   }
+  
 }
 
 app.use(cacheMiddleware);
@@ -36,7 +57,7 @@ app.use(cacheMiddleware);
  * Returns entire timetable
  */
 app.get('/schedule', (req: Request, res: Response<TimeTableEntry[]>) => {
-  cache[req.originalUrl] = scheduleData;
+  client.set(req.originalUrl, JSON.stringify(scheduleData));
   res.json(scheduleData);
 });
 
@@ -56,7 +77,7 @@ app.get('/schedule/:line', (req: Request, res: Response<TimeTableEntry[] | Error
     return res.status(404).json({ message: 'Line not found' });
   }
   if (!departureParam){
-    cache[req.originalUrl] = lineSchedule;
+    client.set(req.originalUrl, JSON.stringify(scheduleData));
     return res.json(lineSchedule);
   } else {
     const departure = getDepartureSanitized(departureParam);
